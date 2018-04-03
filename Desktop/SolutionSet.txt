@@ -1,0 +1,132 @@
+
+// first import the package
+
+val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+import java.sql.Date
+import sqlContext.implicits._
+import org.apache.spark.sql._
+--------------------------------------------------------------------------------
+// GENERAL STEPS:
+1) load the data into a new RDD
+2) define the schema using a case class
+3) create an RDD of Auction objects 
+4) change prod RDD of  objects to a DataFrame
+5) createOrReplaceTempView
+6) perform SparkSql queries
+--------------------------------------------------------------------------------
+Steps for 
+1)Orders text file:-
+
+case class orders(order_id:String,order_date:DATE,order_customer_id:String,order_status:String)
+
+val data = spark.read.textFile("/home/sheetal/Downloads/assignment/Input_dataSet/Orders.txt")
+
+import spark.implicits._
+
+val myFields = data.map(x =>x.split(",")).map{ case Array(order_id,order_date,order_customer_id,order_status) => orders(order_id,order_date,order_customer_id,order_status)}
+
+val df = myFields.toDF
+ 
+df.createOrReplaceTempView("Orders")
+---------------------------------------------------------------------------------
+2)product text file:-
+
+case class products(product_id:String,product_category_id:String,product_name:String,product_description:String,product_price:String,product_image:String)
+
+val data2 = spark.read.textFile("/home/sheetal/Downloads/assignment/Input_dataSet/Products.txt")
+
+val myFields2 = data2.map(x =>x.split(",")).map{ case Array(product_id,product_category_id,product_name,product_description,product_price,product_image) => products(product_id,product_category_id,product_name,product_description,product_price,product_image)}
+
+val df2 = myFields2.toDF
+
+df2.createOrReplaceTempView("Products")
+-----------------------------------------------------------------------------------
+3)Order_item txt file:-
+
+case class order_items(order_item_id: String,order_item_order_id: String,order_item_product_id: String,order_item_quantity:String,order_item_subtotal:String,order_item_product_price:String)
+
+val data3 = spark.read.textFile("/home/sheetal/Downloads/assignment/Input_dataSet/Order_item.txt")
+
+val myFields3 = data3.map(x =>x.split(",")).map{ case Array(order_item_id,order_item_order_id,order_item_product_id,order_item_quantity,order_item_subtotal,order_item_product_price) => order_items(product_id,product_category_id,product_name,product_description,product_price,product_image)}
+
+val df3 = myFields3.toDF
+df3.createOrReplaceTempView("Order_items")
+----------------------------------------------------------------------------------------
+4)customers txt file:-
+
+case class customers(customer_id:String,customer_fname:String,customer_lname:String,customer_email:String,customer_password:String,customer_street:String,
+customer_city:String,customer_state:String,customer_zipcode:String)
+
+val data4 = spark.read.textFile("/home/sheetal/Downloads/assignment/Input_dataSet/Customers.txt")
+
+val myFields3 = data3.map(x =>x.split(",")).map{ case Array(customer_id,customer_fname,customer_lname,customer_email,customer_password,customer_street,
+customer_city,customer_state,customer_zipcode) =>(customer_id,customer_fname,customer_lname,customer_email,customer_password,customer_street,
+customer_city,customer_state,customer_zipcode)
+
+val df4 = myField4.toDF
+
+df4.createOrReplaceTempView("Customers")
+------------------------------------------------------------------------------------------------
+
+1. Total sales for each date
+
+spark.sql("select order_date,sum(order_item_quantity) as Total_sales from Orders as t join Order_Items 
+as p on p.order_item_order_id = t.order_id group by order_date").show()
+
+------------------------------------------------------------------------------------------------
+2. Total sales for each month
+
+spark.sql("select monthname(order_date) as monthh,sum(order_item_quantity) as Total_sales from Orders as t join Order_Items as p on p.order_item_order_id = t.order_id group by month(order_date)").show()
+
+-------------------------------------------------------------------------------------------------- 
+3.  Average sales for each date 
+
+spark.sql("select order_date,avg(order_item_quantity) as Total_sales from Orders as t join Order_Items as p on p.order_item_order_id = t.order_id group by order_date").show()
+
+-------------------------------------------------------------------------------------------------
+4.  Average sales for each month
+
+spark.sql("select monthname(order_date) as monthh,avg(order_item_quantity) as Total_sales from Orders as t join Order_Items as p on p.order_item_order_id = t.order_id group by month(order_date)").show()
+-------------------------------------------------------------------------------------------------
+5. Name of Month having highest sale
+
+spark.sql("select monthname(order_date) as monthh,sum(order_item_quantity) as Total_sales from Orders as t join Order_Items as p on p.order_item_order_id = t.order_id group by month(order_date) order by Total_sales desc limit 1").show()
+
+--------------------------------------------------------------------------------------------------
+6. Top 10 revenue generating products
+
+spark.sql("select u.product_name,sum(order_item_quantity*price) as product_revenue 
+from Orders as t join Order_Items as p 
+on p.order_item_order_id = t.order_id join Products as u on u.product_id=p.product_id
+group by u.product_id order by product_revenue desc limit 10").show()
+
+--------------------------------------------------------------------------------------------------
+7. Top 3 purchased customers for each day/month
+    (not sure...... not for top 3 per month)
+
+spark.sql("select c.fname,max(p.quantity) as qty,dayname(t.order_date)
+from Orders as t join Order_Items as p 
+on p.order_item_order_id = t.order_id 
+join Customers c on c.customer_id=t.customer_id 
+group by dayname(t.order_date) limit 3").show()
+
+---------------------------------------------------------------------------------------------------
+8. Most sold products for each day/month
+
+spaark.sql("select count(quantity) as c,product_name , monthname(o.order_date) as m
+from Products as t join Order_Items 
+as p on t.product_id= p.product_id join Orders as o 
+on p.order_item_order_id=o.order_id group by m order by c desc limit 1").show()
+
+--------------------------------------------------------------------------------------------------
+9. Count of distinct Customer, group by State  (use customer table)
+
+spark.sql("select count(distinct(customer_fname)),state from Customers group by state").show()
+
+-------------------------------------------------------------------------------------------------
+10. Most popular product category
+
+spark.sql("select p.category_id,p.product_id,sum(quantity) as s_q from Products as p join Order_Items as t 
+on p.product_id = t.order_item_order_id
+join Orders as c on t.order_item_id=c.order_id").show()
+# analysis-of-sales-retail
